@@ -9,6 +9,8 @@ Image region selector for dataset creation
   
 ## Commands Needed ##
 all modules where installed using pip
-`pip install PyQT5`
-`pip install pandas`
-`pip install xlrd`
+<pre>
+pip install PyQT5
+pip install pandas
+pip install xlrd
+</pre>
