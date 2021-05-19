@@ -165,19 +165,20 @@ class QtUserInterface(QWidget):
 
     # Gets images in destined folder
     def getImagesFromFolder(self):
-        for img in listdir(self.root_folder):
-            try:
-                if img.split(".")[1] == "png" or img.split(".")[1] == "jpg":
-                    self.images_arr.append(img)
-            except Exception as e:
-                print(e)
+        if len(self.root_folder):
+            for img in listdir(self.root_folder):
+                try:
+                    if img.split(".")[1] == "png" or img.split(".")[1] == "jpg":
+                        self.images_arr.append(img)
+                except Exception as e:
+                    print(e)
         self.cur_image = 0
         self.show_image()
 
     ##### Change Image 
     # Change image (+1 or -1)
     def getImage(self, i):
-        if not self.cur_image == -1:
+        if not self.cur_image == -1 and len(self.images_arr):
             self.cur_image += i
             if self.cur_image < 0:
                 self.cur_image = len(self.images_arr) - 1
@@ -195,10 +196,11 @@ class QtUserInterface(QWidget):
     def show_image(self):
         if self.cur_image == -1:
             name = "Black2000.png"
-        else:
-            name = str(self.root_folder +"/"+ self.images_arr[self.cur_image])
-            self.imageName.setText(self.images_arr[self.cur_image])
-        self.currentImage.emit(name)
+            self.currentImage.emit(name)
+        elif len(self.root_folder):
+                name = str(self.root_folder +"/"+ self.images_arr[self.cur_image])
+                self.imageName.setText(self.images_arr[self.cur_image])
+                self.currentImage.emit(name)
 
     ##### Create and Fill the Tags Table
     # Create tags table
