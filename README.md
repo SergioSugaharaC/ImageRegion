@@ -1,3 +1,4 @@
+<pre>
 # ImageRegion
 Image region selector for dataset creation
 
@@ -12,3 +13,4 @@ all modules where installed using pip \n
 \t pip install PyQT5 \n
 \t pip install pandas \n
 \t pip install xlrd \n
+<pre>
