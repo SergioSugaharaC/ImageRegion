@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (QGraphicsView, QGraphicsScene, QFileDialog,
                              QTableWidgetItem, QLineEdit, QPushButton, QApplication)
 from sys import argv, exit
 from pandas import DataFrame, read_excel
-from os import path, getcwd, listdir
+from os import path, getcwd, listdir, makedirs
 
 
 class QtImageViewer(QGraphicsView):
@@ -79,15 +79,16 @@ class QtImageViewer(QGraphicsView):
         scenePos = self.mapToScene(event.pos())
         if event.button() == Qt.LeftButton:
             self.setDragMode(QGraphicsView.NoDrag)
-            self.leftMouseButtonReleased.emit(self.startX, self.startY, scenePos.x(), scenePos.y(), self.pixmap.width(), self.pixmap.height())
+            if self.hasImage():
+                self.leftMouseButtonReleased.emit(self.startX, self.startY, scenePos.x(), scenePos.y(), self.pixmap.width(), self.pixmap.height())
             self.updateEvent()
         elif event.button() == Qt.RightButton:
             if self.canZoom:
                 viewBBox = self.zoomStack[-1] if len(self.zoomStack) else self.sceneRect()
-                selectionBBox = self.scene.selectionArea().boundingRect().intersected(viewBBox)
+                self.selectionBBox = self.scene.selectionArea().boundingRect().intersected(viewBBox)
                 self.scene.setSelectionArea(QPainterPath())  # Clear current selection area.
-                if selectionBBox.isValid() and (selectionBBox != viewBBox):
-                    self.zoomStack.append(selectionBBox)
+                if self.selectionBBox.isValid() and (self.selectionBBox != viewBBox):
+                    self.zoomStack.append(self.selectionBBox)
                     self.updateViewer()
             self.setDragMode(QGraphicsView.NoDrag)
 
@@ -105,10 +106,10 @@ class QtImageViewer(QGraphicsView):
         lines = []
         for item in self.regionsArr:
             self.scene.removeItem(item)
-        if not self.imageFile == "Black2000.png":
-            if(path.exists("regions/"+self.imageFile.split("/")[-1].split(".")[0]+".txt")):
-                with open("regions/"+self.imageFile.split("/")[-1].split(".")[0]+".txt", 'r') as file:
-                    lines = file.readlines()
+        
+        if(path.exists("regions/"+self.imageFile.split("/")[-1].split(".")[0]+".txt")):
+            with open("regions/"+self.imageFile.split("/")[-1].split(".")[0]+".txt", 'r') as file:
+                lines = file.readlines()
         for l in lines:
             if(len(l)):
                 c = l.split(',')
@@ -137,7 +138,7 @@ class QtImageViewer(QGraphicsView):
 
         # Flags for enabling/disabling mouse interaction.
         self.canZoom = True
-        self.canPan = True
+        self.isZooming = False
 
         # set rectangle color and thickness
         self.penRectangle = QPen(Qt.red)
@@ -157,11 +158,12 @@ class QtUserInterface(QWidget):
 
     ##### Image Folder Selection 
     # Opens folder browser
-    def getDirectory(self):
+    def getImageDirectory(self):
         response = QFileDialog.getExistingDirectory(self, directory=getcwd())
-        self.root_folder = response
-        self.dir_txt.setText(response)
-        self.getImagesFromFolder()
+        if len(response):
+            self.root_folder = response
+            self.dir_txt.setText(response)
+            self.getImagesFromFolder()
 
     # Gets images in destined folder
     def getImagesFromFolder(self):
@@ -194,18 +196,26 @@ class QtUserInterface(QWidget):
 
     # Send image to the controller class
     def show_image(self):
-        if self.cur_image == -1:
-            name = "Black2000.png"
+        if len(self.root_folder) and self.cur_image > -1:
+            name = str(self.root_folder +"/"+ self.images_arr[self.cur_image])
+            self.imageName.setText(self.images_arr[self.cur_image])
             self.currentImage.emit(name)
-        elif len(self.root_folder):
-                name = str(self.root_folder +"/"+ self.images_arr[self.cur_image])
-                self.imageName.setText(self.images_arr[self.cur_image])
-                self.currentImage.emit(name)
 
     ##### Create and Fill the Tags Table
     # Create tags table
+    def getTagsDirectory(self):
+        response = QFileDialog.getOpenFileName(self, directory=getcwd(), filter="*.xlsx; *.xls")
+        print(response[0])
+        if len(response[0]):
+            self.tagsFile.setText(response[0])
+            self.readTable()
+
     def readTable(self):
-        self.pd_table = DataFrame(read_excel('.\Tags.xlsx'),dtype=str)
+        path = self.tagsFile.text()
+        self.pd_table = DataFrame(read_excel(path),dtype=str)
+        self.tagTable.setHorizontalHeaderLabels(self.pd_table.columns)
+        self.tagTable.setRowCount(len(self.pd_table.iloc[:,0]))
+        self.fillTagsTable()
 
     def fillTagsTable(self):
         tags_arr = self.pd_table.iloc[:,0]
@@ -225,10 +235,11 @@ class QtUserInterface(QWidget):
     def initLeftSection(self):
         # directory textbox controller
         self.dir_txt = QLineEdit(self)
+        self.dir_txt.setText("Select Folder...")
         self.dir_txt.setReadOnly(True)
         
         self.dir_btn = QPushButton('...')
-        self.dir_btn.clicked.connect(self.getDirectory)
+        self.dir_btn.clicked.connect(self.getImageDirectory)
         self.dir_btn.setMaximumWidth(25)
 
         self.directory_selector = QHBoxLayout()
@@ -251,21 +262,26 @@ class QtUserInterface(QWidget):
         self.imagesButtons.addWidget(self.prev_btn)
         self.imagesButtons.addWidget(self.next_btn)
 
+        # Tags Excel File Selector
+        self.tagsFile = QLineEdit(self)
+        self.tagsFile.setText("Select Tags Excel...")
+        self.tagsFile.setReadOnly(True)
+
+        self.tag_btn = QPushButton('...')
+        self.tag_btn.clicked.connect(self.getTagsDirectory)
+        self.tag_btn.setMaximumWidth(25)
+
+        self.tags_dir_selector = QHBoxLayout()
+        self.tags_dir_selector.addWidget(self.tagsFile)
+        self.tags_dir_selector.addWidget(self.tag_btn)
+
         # Tags Table
-        self.readTable()
+        #self.readTable()
         self.tagTable = QTableWidget()
         self.tagTable.setSortingEnabled(True)
         self.tagTable.setColumnCount(2)
-        
-        self.tagTable.setHorizontalHeaderLabels(self.pd_table.columns)
-        self.tagTable.setRowCount(len(self.pd_table.iloc[:,0]))
         self.tagTable.horizontalHeader().setStretchLastSection(True)
-        self.fillTagsTable()
-        #self.tagTable.setSelectionBehavior(self.tagTable.SelectionBehavior.SelectItems)
-        #self.tagTable.setSelectionModel(SelectionMode.SingleSelection)
         self.tagTable.clicked.connect(self.selectTag)
-        #self.index = self.tagTable.currentRow()
-        #self.NewIndex = self.tagTable.model().index(0, 1)
 
     # Contructor
     def __init__(self, parent=None):
@@ -279,6 +295,7 @@ class QtUserInterface(QWidget):
         self.leftSection.addLayout(self.directory_selector)
         self.leftSection.addWidget(self.imageName)
         self.leftSection.addLayout(self.imagesButtons)
+        self.leftSection.addLayout(self.tags_dir_selector)
         self.leftSection.addWidget(self.tagTable)
         self.setLayout(self.leftSection)
 
@@ -315,8 +332,12 @@ class DisplayImageWidget(QWidget):
         maxX = int(imgW) if maxX > int(imgW) else maxX
         maxY = int(imgH) if maxY > int(imgH) else maxY
 
+        p = path.join(getcwd() + "/regions")
+        if not path.exists(p):
+            makedirs(p)
+
         # Creates file if not existing, and appends the marked region
-        if not self.image == "Black2000.png" and len(self.selectedTag):
+        if len(self.selectedTag):
             name = self.image.split('/')[-1].split(".")[0]
             if not(minX == maxX and minY == maxY):
                 with open("regions/"+name+".txt", 'a') as file:
